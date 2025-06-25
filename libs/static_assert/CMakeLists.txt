@@ -14,16 +14,15 @@ add_library(Boost::static_assert ALIAS boost_static_assert)
 target_include_directories(boost_static_assert INTERFACE include)
 
 target_link_libraries(boost_static_assert
-    INTERFACE
-        Boost::config
+  INTERFACE
+    Boost::config
 )
 
-# boost_install requires PROJECT_VERSION
-# Without the superproject, we don't have any, so skip installation
+# BUILD_TESTING is the standard CTest variable that enables testing
 
-if(BOOST_SUPERPROJECT_VERSION)
+if(BUILD_TESTING)
 
-  include(BoostInstall)
-  boost_install(TARGETS boost_static_assert HEADER_DIRECTORY include/)
+  add_subdirectory(test)
+  add_subdirectory(example)
 
 endif()

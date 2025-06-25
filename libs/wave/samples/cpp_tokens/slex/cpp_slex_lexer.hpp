@@ -58,6 +58,7 @@ namespace lexer {
 #define INIT_DATA_CPP_SIZE          15
 #define INIT_DATA_PP_NUMBER_SIZE    2
 #define INIT_DATA_CPP0X_SIZE        15
+#define INIT_DATA_CPP2A_SIZE        10
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -114,6 +115,7 @@ private:
     static typename base_type::lexer_data const init_data_cpp[INIT_DATA_CPP_SIZE];  // C++ only patterns
     static typename base_type::lexer_data const init_data_pp_number[INIT_DATA_PP_NUMBER_SIZE];  // pp-number only patterns
     static typename base_type::lexer_data const init_data_cpp0x[INIT_DATA_CPP0X_SIZE];  // C++0X only patterns
+    static typename base_type::lexer_data const init_data_cpp2a[INIT_DATA_CPP2A_SIZE];  // C++2A only patterns
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -155,8 +157,13 @@ private:
 #define EXTCHAR_SPEC        "(" "[uU]" OR "u8" ")"
 
 #define BACKSLASH           "(" Q("\\") OR TRI(Q("/")) ")"
+#if BOOST_WAVE_USE_STRICT_LEXER != 0
+#define ESCAPECHARS         "[abfnrtv?'\"]"
+#else
+#define ESCAPECHARS         "[abeEfnrtv?'\"]"
+#endif
 #define ESCAPESEQ           "(" BACKSLASH "(" \
-                                "[abfnrtv?'\"]" OR \
+                                ESCAPECHARS OR \
                                 BACKSLASH OR \
                                 "x" HEXDIGIT "+" OR \
                                 OCTALDIGIT OCTALDIGIT "?" OCTALDIGIT "?" \
@@ -432,11 +439,11 @@ lexer<IteratorT, PositionT>::init_data_pp_number[INIT_DATA_PP_NUMBER_SIZE] =
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// C++ only token definitions
+// C++11 only token definitions
 
-#define T_EXTCHARLIT      token_id(T_CHARLIT|AltTokenType)
-#define T_EXTSTRINGLIT    token_id(T_STRINGLIT|AltTokenType)
-#define T_EXTRAWSTRINGLIT token_id(T_RAWSTRINGLIT|AltTokenType)
+constexpr token_id T_EXTCHARLIT = T_CHARLIT | AltTokenType;
+constexpr token_id T_EXTSTRINGLIT = T_STRINGLIT | AltTokenType;
+constexpr token_id T_EXTRAWSTRINGLIT = T_RAWSTRINGLIT | AltTokenType;
 
 template <typename IteratorT, typename PositionT>
 typename lexer_base<IteratorT, PositionT>::lexer_data const
@@ -459,9 +466,30 @@ lexer<IteratorT, PositionT>::init_data_cpp0x[INIT_DATA_CPP0X_SIZE] =
     TOKEN_DATA(NOEXCEPT, "noexcept"),
     TOKEN_DATA(NULLPTR, "nullptr"),
     TOKEN_DATA(STATICASSERT, "static_assert"),
-    TOKEN_DATA(THREADLOCAL, "threadlocal"),
+    TOKEN_DATA(THREADLOCAL, "thread_local"),
     { token_id(0) }       // this should be the last entry
 };
+
+///////////////////////////////////////////////////////////////////////////////
+// C++20 only token definitions
+
+template <typename IteratorT, typename PositionT>
+typename lexer_base<IteratorT, PositionT>::lexer_data const
+lexer<IteratorT, PositionT>::init_data_cpp2a[INIT_DATA_CPP2A_SIZE] =
+{
+    TOKEN_DATA(CHAR8_T, "char8_t"),
+    TOKEN_DATA(CONCEPT, "concept"),
+    TOKEN_DATA(CONSTEVAL, "consteval"),
+    TOKEN_DATA(CONSTINIT, "constinit"),
+    TOKEN_DATA(CO_AWAIT, "co_await"),
+    TOKEN_DATA(CO_RETURN, "co_return"),
+    TOKEN_DATA(CO_YIELD, "co_yield"),
+    TOKEN_DATA(REQUIRES, "requires"),
+    TOKEN_DATA(SPACESHIP, "<=>"),
+
+    { token_id(0) }       // this should be the last entry
+};
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //  undefine macros, required for regular expression definitions
@@ -483,6 +511,7 @@ lexer<IteratorT, PositionT>::init_data_cpp0x[INIT_DATA_CPP0X_SIZE] =
 #undef CHAR_SPEC
 #undef BACKSLASH
 #undef ESCAPESEQ
+#undef ESCAPECHARS
 #undef HEXQUAD
 #undef UNIVERSALCHAR
 #undef PP_NUMBERDEF
@@ -528,13 +557,25 @@ lexer<IteratorT, PositionT>::init_dfa(boost::wave::language_support lang)
         }
     }
 
-// if in C++0x mode, add all new keywords
+// if in C++0x mode, add appropriate keywords
 #if BOOST_WAVE_SUPPORT_CPP0X != 0
-    if (boost::wave::need_cpp0x(lang)) {
+    if (boost::wave::need_cpp0x(lang) || boost::wave::need_cpp2a(lang)) {
         for (int j = 0; 0 != init_data_cpp0x[j].tokenid; ++j) {
             this->register_regex(init_data_cpp0x[j].tokenregex,
                 init_data_cpp0x[j].tokenid, init_data_cpp0x[j].tokencb,
                 init_data_cpp0x[j].lexerstate);
+        }
+    }
+#endif
+
+    // if in C++2a mode, add those keywords
+#if BOOST_WAVE_SUPPORT_CPP2A != 0
+        if (wave::need_cpp2a(lang)) {
+            for (int j = 0; 0 != init_data_cpp2a[j].tokenid; ++j) {
+                this->register_regex(init_data_cpp2a[j].tokenregex,
+                                     init_data_cpp2a[j].tokenid,
+                                     init_data_cpp2a[j].tokencb,
+                                     init_data_cpp2a[j].lexerstate);
         }
     }
 #endif
@@ -626,6 +667,8 @@ public:
 // get the next token from the input stream
     token_type& get(token_type& result) BOOST_OVERRIDE
     {
+        using namespace cpplexer::slex::lexer;
+
         if (!at_eof) {
             do {
             // generate and return the next token
@@ -767,10 +810,6 @@ private:
 
 template <typename IteratorT, typename PositionT>
 lexer::lexer<IteratorT, PositionT> slex_functor<IteratorT, PositionT>::lexer;
-
-#undef T_EXTCHARLIT
-#undef T_EXTSTRINGLIT
-#undef T_EXTRAWSTRINGLIT
 
 ///////////////////////////////////////////////////////////////////////////////
 //

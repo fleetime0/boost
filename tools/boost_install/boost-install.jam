@@ -25,6 +25,7 @@ feature.feature boost-install.cmakedir : : free ;
 feature.feature boost-install.includedir : : free ;
 feature.feature boost-install.libdir : : free ;
 feature.feature boost-install.lib-target-type : : free ;
+feature.feature boost-install.dll-target : : free ;
 
 if "--verbose" in [ modules.peek : ARGV ]
 {
@@ -53,6 +54,61 @@ local rule .debug ( messages * )
 }
 
 # generate-cmake-variant-
+
+local rule remap-library ( lib )
+{
+    switch $(lib)
+    {
+    case "python.lib" :
+
+        return ;
+
+    case "zlib" :
+
+        return "z" ;
+
+    case "bzip2" :
+
+        return "bz2" ;
+
+    case "icuuc" :
+
+        if [ modules.peek : ICU_ICUUC_NAME ]
+        {
+            return [ modules.peek : ICU_ICUUC_NAME ] ;
+        }
+        else
+        {
+            return "icuuc" ;
+        }
+
+    case "icudt" :
+
+        if [ modules.peek : ICU_ICUDT_NAME ]
+        {
+            return [ modules.peek : ICU_ICUDT_NAME ] ;
+        }
+        else
+        {
+            return "icudata" ;
+        }
+
+    case "icuin" :
+
+        if [ modules.peek : ICU_ICUIN_NAME ]
+        {
+            return [ modules.peek : ICU_ICUIN_NAME ] ;
+        }
+        else
+        {
+            return "icui18n" ;
+        }
+
+    case * :
+
+        return $(lib) ;
+    }
+}
 
 rule generate-cmake-variant- ( target : sources * : properties * )
 {
@@ -171,7 +227,7 @@ rule generate-cmake-variant- ( target : sources * : properties * )
         print.text
 
             "if(Boost_COMPILER)"
-            "  if(NOT Boost_COMPILER STREQUAL \"$(toolset)\" AND NOT Boost_COMPILER STREQUAL \"-$(toolset)\")"
+            "  if(NOT \"$(toolset)\" IN_LIST Boost_COMPILER AND NOT \"-$(toolset)\" IN_LIST Boost_COMPILER)"
             "    _BOOST_SKIPPED(\"$(fname)\" \"$(toolset), Boost_COMPILER=${Boost_COMPILER}\")"
             "    return()"
             "  endif()"
@@ -369,7 +425,7 @@ rule generate-cmake-variant- ( target : sources * : properties * )
         ""
         "  set_target_properties($(target) PROPERTIES"
         "    INTERFACE_INCLUDE_DIRECTORIES \"\${_BOOST_INCLUDEDIR}\""
-        "    INTERFACE_COMPILE_DEFINITIONS \"BOOST_ALL_NO_LIB\""
+        "    INTERFACE_COMPILE_DEFINITIONS \"BOOST_$(lname:U)_NO_LIB\""
         "  )"
         "endif()"
         ""
@@ -389,6 +445,17 @@ rule generate-cmake-variant- ( target : sources * : properties * )
 
     .info "  loc-prop=" $(loc-prop) ;
 
+    local dll-target = [ $(ps).get <boost-install.dll-target> ] ;
+
+    local dll-name ;
+
+    if $(dll-target)
+    {
+        dll-name = [ $(dll-target).name ] ;
+    }
+
+    .info "  dll-name=" $(dll-name) ;
+
     print.text
 
         "get_target_property(__boost_imploc $(target) IMPORTED_$(loc-prop)_$(variant:U))"
@@ -405,6 +472,17 @@ rule generate-cmake-variant- ( target : sources * : properties * )
         "  )"
         ""
         : true ;
+
+    if $(lib-target-type) = IMPORT_LIB
+    {
+    print.text
+
+        "set_target_properties($(target) PROPERTIES"
+        "  IMPORTED_LOCATION_$(variant:U) \"${_BOOST_LIBDIR}/$(dll-name)\""
+        "  )"
+        ""
+        : true ;
+    }
 
     if $(variant) = release
     {
@@ -437,6 +515,33 @@ rule generate-cmake-variant- ( target : sources * : properties * )
         print.text
 
             "list(APPEND _BOOST_$(lname:U)_DEPS $(deps:S=:J= ))"
+            ""
+            : true ;
+    }
+
+    local deps2 = [ set.difference [ $(ps).get <boost-install.dependency> ] : boost_$(deps) ] ;
+    .info "  deps2=" $(deps2) ;
+
+    local deps3 ;
+
+    for local dep in $(deps2)
+    {
+        deps3 += [ remap-library $(dep) ] ;
+    }
+
+    .info "  deps3=" $(deps3) ;
+
+    if $(deps3) && $(link) = static
+    {
+        print.text
+
+            "if(CMAKE_CONFIGURATION_TYPES)"
+            "  set_property(TARGET $(target) APPEND PROPERTY INTERFACE_LINK_LIBRARIES"
+            "    \"$<$<CONFIG:$(variant)>:$(deps3:J=;)>\")"
+            "else()"
+            "  set_property(TARGET $(target) APPEND PROPERTY INTERFACE_LINK_LIBRARIES"
+            "    $(deps3:J= ))"
+            "endif()"
             ""
             : true ;
     }
@@ -503,6 +608,17 @@ local rule choose-lib-target ( sources * )
     return $(result) ;
 }
 
+local rule get-dll-target ( sources * )
+{
+    for local t in $(sources)
+    {
+        if [ type.is-derived [ $(t).type ] SHARED_LIB ]
+        {
+            return $(t) ;
+        }
+    }
+}
+
 # get-dependency-names: Returns the base names of all
 # dependency libraries.
 #
@@ -536,6 +652,8 @@ rule generate-cmake-variant ( project name : property-set : sources * )
 
     local lib-target = [ choose-lib-target $(sources) ] ;
 
+    local dll-target = [ get-dll-target $(sources) ] ;
+
     local other-names = [ get-dependency-names $(sources) ] ;
     property-set = [ $(property-set).add-raw <boost-install.dependency>$(other-names) ] ;
 
@@ -549,9 +667,15 @@ rule generate-cmake-variant ( project name : property-set : sources * )
 
         .debug "  lib-target-type=" $(lib-target-type) ;
 
+        if $(dll-target)
+        {
+            .debug "  dll-target=" [ $(dll-target).name ] ;
+        }
+
         local tag = [ tag $(name) : : $(property-set) ] ;
 
         property-set = [ $(property-set).add-raw <boost-install.lib-target-type>$(lib-target-type) ] ;
+        property-set = [ $(property-set).add-raw <boost-install.dll-target>$(dll-target) ] ;
 
         local a = [ new non-scanning-action $(lib-target) : boost-install.generate-cmake-variant- : $(property-set) ] ;
 
@@ -647,6 +771,8 @@ rule generate-cmake-config- ( target : sources * : properties * )
         "  message(STATUS \"Found $(name) ${$(name)_VERSION} at ${$(name)_DIR}\")"
         "endif()"
         ""
+        "mark_as_advanced($(name)_DIR)"
+        ""
         "# Compute the include and library directories relative to this file."
         ""
         "get_filename_component(_BOOST_CMAKEDIR \"${CMAKE_CURRENT_LIST_DIR}/../\" REALPATH)"
@@ -682,7 +808,6 @@ rule generate-cmake-config- ( target : sources * : properties * )
             ""
             "set_target_properties($(ltarget) PROPERTIES"
             "  INTERFACE_INCLUDE_DIRECTORIES \"\${_BOOST_INCLUDEDIR}\""
-            "  INTERFACE_COMPILE_DEFINITIONS \"BOOST_ALL_NO_LIB\""
             ")"
             ""
             "unset(_BOOST_INCLUDEDIR)"
@@ -825,12 +950,6 @@ rule generate-cmake-config- ( target : sources * : properties * )
             : true ;
         }
     }
-
-    print.text
-
-        "mark_as_advanced($(name)_DIR)"
-        ""
-        : true ;
 }
 
 actions generate-cmake-config-
@@ -1189,14 +1308,21 @@ rule boost-install ( libraries * )
 
     local p = [ project.current ] ;
 
-    package.install install-libraries Boost
-        : <install-no-version-symlinks>on
-        : # No binaries
-        : $(libraries)
-        : # No headers
-    ;
+    local libdir = [ boost-install-dirs.libdir ] ;
+    local bindir = [ boost-install-dirs.bindir ] ;
 
-    $(p).mark-target-as-explicit install-libraries ;
+    install install-libraries-static : $(libraries) : <location>$(libdir) <install-dependencies>on <install-type>STATIC_LIB ;
+    $(p).mark-target-as-explicit install-libraries-static ;
+
+    alias install-libraries-shared : install-libraries-shared- ;
+    alias install-libraries-shared : install-libraries-shared-cygwin : <target-os>cygwin ;
+    $(p).mark-target-as-explicit install-libraries-shared ;
+
+    install install-libraries-shared- : $(libraries) : <location>$(libdir) <install-type>SHARED_LIB <install-type>PDB <install-dependencies>on <install-no-version-symlinks>on ;
+    $(p).mark-target-as-explicit install-libraries-shared- ;
+
+    install install-libraries-shared-cygwin : $(libraries) : <location>$(bindir) <install-type>SHARED_LIB <install-type>PDB <install-dependencies>on <install-no-version-symlinks>on ;
+    $(p).mark-target-as-explicit install-libraries-shared-cygwin ;
 
     install install-unprefixed-static : $(unprefixed) : <install-type>STATIC_LIB <conditional>@boost-install%install-subdir ;
     $(p).mark-target-as-explicit install-unprefixed-static ;
@@ -1209,7 +1335,7 @@ rule boost-install ( libraries * )
     generate install-dependencies : $(libraries) : <generating-rule>@boost-install%generate-dependencies <name>install ;
     $(p).mark-target-as-explicit install-dependencies ;
 
-    alias install : install-libraries install-unprefixed-static install-unprefixed-shared install-cmake-config install-dependencies ;
+    alias install : install-libraries-static install-libraries-shared install-unprefixed-static install-unprefixed-shared install-cmake-config install-dependencies ;
     $(p).mark-target-as-explicit install ;
 
     # Target stage
@@ -1221,13 +1347,13 @@ rule boost-install ( libraries * )
     install stage-libraries-static : $(libraries) : <location>$(stage-libdir) <install-dependencies>on <install-type>STATIC_LIB ;
     $(p).mark-target-as-explicit stage-libraries-static ;
 
-    install stage-libraries-shared : $(libraries) : <location>$(stage-libdir) <install-dependencies>on <install-type>SHARED_LIB <install-no-version-symlinks>on ;
+    install stage-libraries-shared : $(libraries) : <location>$(stage-libdir) <install-dependencies>on <install-type>SHARED_LIB <install-type>PDB <install-no-version-symlinks>on ;
     $(p).mark-target-as-explicit stage-libraries-shared ;
 
     install stage-unprefixed-static : $(unprefixed) : <install-type>STATIC_LIB <conditional>@boost-install%stage-subdir ;
     $(p).mark-target-as-explicit stage-unprefixed-static ;
 
-    install stage-unprefixed-shared : $(unprefixed) : <install-type>SHARED_LIB <install-no-version-symlinks>on <conditional>@boost-install%stage-subdir ;
+    install stage-unprefixed-shared : $(unprefixed) : <install-type>SHARED_LIB <install-type>PDB <install-no-version-symlinks>on <conditional>@boost-install%stage-subdir ;
     $(p).mark-target-as-explicit stage-unprefixed-shared ;
 
     generate stage-dependencies : $(libraries) : <generating-rule>@boost-install%generate-dependencies <name>stage ;

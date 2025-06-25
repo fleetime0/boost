@@ -703,7 +703,7 @@ public:
         failgrind<P>(c(",\r\n"),                            error::bad_content_length);
         failgrind<P>(c("0,\r\n"),                           error::bad_content_length);
         failgrind<P>(m("Content-Length: 0\r\n"
-                        "Content-Length: 100\r\n"),         error::bad_content_length);
+                        "Content-Length: 100\r\n"),         error::multiple_content_length);
     }
 
     void
@@ -1136,7 +1136,7 @@ public:
         auto const grind =
         [&](string_view s)
         {
-            static_string<100> ss{s};
+            static_string<100> ss(s.data(), s.size());
             test::fuzz_rand r;
             test::fuzz(ss, 4, 5, r,
             [&](string_view s)
@@ -1500,6 +1500,40 @@ public:
         }
     }
 
+    void
+    testUnlimitedBody()
+    {
+        const char data[] =
+            "POST / HTTP/1.1\r\n"
+            "Content-Length: 5\r\n"
+            "\r\n"
+            "*****";
+
+        test::fail_count fc(1000);
+        test_parser<true> p(fc);
+        p.body_limit(none);
+        error_code ec;
+        p.put(net::buffer(data, strlen(data)), ec);
+        BEAST_EXPECTS(!ec, ec.message());
+    }
+
+    void
+    testIssue2201()
+    {
+        const char data[] =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Length: 5\r\n"
+            "\r\n"
+            "*****";
+
+        test_parser<false> p;
+        p.eager(true);
+        p.body_limit(3);
+        error_code ec;
+        p.put(net::buffer(data, strlen(data)), ec);
+        BEAST_EXPECT(ec == error::body_limit);
+    }
+
     //--------------------------------------------------------------------------
 
     void
@@ -1528,6 +1562,8 @@ public:
         testIssue1267();
         testChunkedOverflow();
         testChunkedBodySize();
+        testUnlimitedBody();
+        testIssue2201();
     }
 };
 

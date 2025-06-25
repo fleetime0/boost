@@ -4,7 +4,7 @@
 <title>regex_replace</title>
 <link rel="stylesheet" href="../../../../../../doc/src/boostbook.css" type="text/css">
 <meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
-<link rel="home" href="../../index.html" title="Boost.Regex 5.1.4">
+<link rel="home" href="../../index.html" title="Boost.Regex 7.0.1">
 <link rel="up" href="../ref.html" title="Reference">
 <link rel="prev" href="regex_search.html" title="regex_search">
 <link rel="next" href="regex_iterator.html" title="regex_iterator">
@@ -135,7 +135,7 @@
 <p>
         calls
       </p>
-<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span><span class="identifier">m</span><span class="special">.</span><span class="identifier">prefix</span><span class="special">().</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">m</span><span class="special">.</span><span class="identifier">prefix</span><span class="special">().</span><span class="identifier">last</span><span class="special">,</span> <span class="identifier">out</span><span class="special">),</span>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span><span class="identifier">m</span><span class="special">.</span><span class="identifier">prefix</span><span class="special">().</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">m</span><span class="special">.</span><span class="identifier">prefix</span><span class="special">().</span><span class="identifier">second</span><span class="special">,</span> <span class="identifier">out</span><span class="special">),</span>
 </pre>
 <p>
         and then calls
@@ -150,7 +150,7 @@
 <p>
         calls
       </p>
-<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span><span class="identifier">last_m</span><span class="special">.</span><span class="identifier">suffix</span><span class="special">().</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last_m</span><span class="special">,</span><span class="identifier">suffix</span><span class="special">().</span><span class="identifier">last</span><span class="special">,</span> <span class="identifier">out</span><span class="special">)</span>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">copy</span><span class="special">(</span><span class="identifier">last_m</span><span class="special">.</span><span class="identifier">suffix</span><span class="special">().</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">last_m</span><span class="special">.</span><span class="identifier">suffix</span><span class="special">().</span><span class="identifier">second</span><span class="special">,</span> <span class="identifier">out</span><span class="special">)</span>
 </pre>
 <p>
         where <span class="emphasis"><em>last_m</em></span> is a copy of the last match found.

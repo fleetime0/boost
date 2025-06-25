@@ -57,6 +57,7 @@ lib boost_fiber
       condition_variable.cpp
       context.cpp
       fiber.cpp
+      waker.cpp
       future.cpp
       mutex.cpp
       properties.cpp
@@ -127,8 +128,9 @@ explicit numa_sources ;
 lib boost_fiber_numa
     : numa_sources
       numa/algo/work_stealing.cpp
-    : 
+    :
     <conditional>@numa
+    <library>boost_fiber
     [ requires cxx11_auto_declarations
                cxx11_constexpr
                cxx11_defaulted_functions
